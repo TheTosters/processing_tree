@@ -1,4 +1,11 @@
 # Processing tree
+[![Pub Package](https://img.shields.io/pub/v/processing_tree.svg)](https://pub.dev/packages/processing_tree)
+[![GitHub Issues](https://img.shields.io/github/issues/TheTosters/processing_tree.svg)](https://github.com/TheTosters/processing_tree/issues)
+[![GitHub Forks](https://img.shields.io/github/forks/TheTosters/processing_tree.svg)](https://github.com/TheTosters/processing_tree/network)
+[![GitHub Stars](https://img.shields.io/github/stars/TheTosters/processing_tree.svg)](https://github.com/TheTosters/processing_tree/stargazers)
+[![GitHub License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/TheTosters/processing_tree/blob/master/LICENSE)
+
+Dart library for building and executing static trees of execution created in runtime.
 
 # When to use it
 The main idea behind usage of this library is when there is a need to build builder in runtime. So for
