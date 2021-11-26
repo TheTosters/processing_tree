@@ -1,0 +1,17 @@
+name: processing_tree
+description: Dart library for building and executing static trees of execution created in runtime.
+version: 0.1.0
+repository: https://github.com/TheTosters/processing_tree
+homepage: https://github.com/TheTosters/processing_tree
+
+environment:
+  sdk: '>=2.14.4 <3.0.0'
+
+dependencies:
+  collection: any
+
+dev_dependencies:
+  lints: ^1.0.0
+  test: ^1.19.4
+  dart_code_metrics: ^4.1.0
+  xml: ^5.3.1
