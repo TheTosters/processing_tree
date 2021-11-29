@@ -1,3 +1,5 @@
+library processing_tree;
+
 import 'package:processing_tree/processing_node.dart';
 
 /// Interface which allows execution of processing tree.

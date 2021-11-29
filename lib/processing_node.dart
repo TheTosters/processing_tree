@@ -1,3 +1,5 @@
+library processing_tree;
+
 /// Informs caller of next action which should take place after processing
 /// current node
 enum Action {

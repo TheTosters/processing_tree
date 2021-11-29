@@ -1,3 +1,7 @@
+library processing_tree;
+
+import 'package:xml/xml.dart';
+
 import 'tree_processor.dart';
 import 'processing_node.dart';
 
@@ -220,5 +224,86 @@ class StackedTreeBuilder {
   /// Finalize build and returns [TreeProcessor] for newly formed tree.
   TreeProcessor build() {
     return TreeProcessorImpl(_root);
+  }
+}
+
+/// Helper interface for automated builders. Allows conversion between
+/// serialized form of processing tree into structures used in ready to use tree.
+abstract class DelegateProvider {
+  /// Returns delegate which is assigned for name.
+  PNDelegate? delegate(String name);
+
+  /// Converts arguments associated with delegate, into form which should be
+  /// passed as [data] argument for [PNDelegate]
+  dynamic delegateData(String delegateName, Map<String, dynamic> rawData);
+}
+
+class _ParsedItem {
+  final PNDelegate delegate;
+  final dynamic data;
+  final bool isLeaf;
+
+  _ParsedItem(this.delegate, this.data, this.isLeaf);
+}
+
+class XmlTreeBuilder {
+  TreeProcessor? _processor;
+  final DelegateProvider provider;
+
+  XmlTreeBuilder(this.provider);
+
+  /// Returns object which might be used to execute processing tree.
+  /// If xml fail to parse, then [XmlParserException] is thrown. If xml is
+  /// valid but it's unable to build tree then [TreeBuilderException] is thrown,
+  /// otherwise ready to use implementation of [TreeProcessor] is returned.
+  TreeProcessor build(String xmlStr) {
+    _parseXml(xmlStr);
+    if (_processor == null) {
+      throw TreeBuilderException("Unable to build tree.");
+    }
+    return _processor!;
+  }
+
+  void _parseXml(String xmlStr) {
+    final xmlDoc = XmlDocument.parse(xmlStr);
+    XmlElement xmlElement = xmlDoc.rootElement;
+    final _ParsedItem item = _processElement(xmlElement);
+    StackedTreeBuilder builder = StackedTreeBuilder(item.delegate, item.data);
+    _processSubLevel(xmlElement, builder, false);
+    _processor = builder.build();
+  }
+
+  Map<String, dynamic> _extractArguments(XmlElement xmlElement) {
+    final Map<String, String> inData = {};
+    for (var attr in xmlElement.attributes) {
+      inData[attr.name.toString()] = attr.value;
+    }
+    return inData;
+  }
+
+  _ParsedItem _processElement(XmlElement xmlElement) {
+    final nodeName = xmlElement.name.toString();
+    final delegate = provider.delegate(nodeName);
+    final data = provider.delegateData(nodeName, _extractArguments(xmlElement));
+    if (delegate == null) {
+      throw TreeBuilderException("No delegate for xml node name '$nodeName'");
+    }
+    return _ParsedItem(delegate, data, xmlElement.firstElementChild == null);
+  }
+
+  void _processSubLevel(
+      XmlElement xmlElement, StackedTreeBuilder builder, bool popLevelAtEnd) {
+    for (var subElement in xmlElement.childElements) {
+      final _ParsedItem item = _processElement(subElement);
+      if (item.isLeaf) {
+        builder.addChild(item.delegate, item.data);
+      } else {
+        builder.push(item.delegate, item.data);
+        _processSubLevel(subElement, builder, true);
+        if (popLevelAtEnd) {
+          builder.levelUp();
+        }
+      }
+    }
   }
 }
