@@ -1,5 +1,3 @@
-library processing_tree;
-
 import 'package:xml/xml.dart';
 
 import 'tree_processor.dart';
@@ -24,7 +22,7 @@ class TreeBuilder {
   /// If [parent] is null then root node is add, this can be done only once or
   /// [TreeBuilderException] will be thrown. Each next call to this method
   /// should provide [parent] object for newly added node. As a parent to
-  /// subnode object returned from previous call should be used:
+  /// subNode object returned from previous call should be used:
   ///
   /// ```dart
   ///   var root = builder.add(null, (c,d) => {return Action.proceed}, null);
@@ -238,19 +236,76 @@ abstract class DelegateProvider {
   dynamic delegateData(String delegateName, Map<String, dynamic> rawData);
 }
 
+/// Tells builder if given node should be considered as a value or algorithm
+/// element
+enum ParsedItemType {
+  /// This is node which represents constant value. While parsing call to
+  /// delegate will be performed, returned value will be passed to parent node
+  /// [data] collection. Item marked with this type will not create node in
+  /// processing tree, it must be a leaf!
+  ///
+  /// *Contract #1:* delegate of constValue takes List<dynamic> as a context,
+  /// and adds result which will to be stored in parent data.
+  ///
+  /// *Contract #2:* Parent data is not null and it conforms to
+  /// operator [](String name)=dynamic. To store result of delegate call.
+  ///
+  /// *Contract #3:* Result value of delegate different then [Action.proceed] is
+  /// considered as error and TreBuildException is thrown.
+  constValue,
+
+  /// This is node which is part of algorithm, it should be represented as
+  /// a delegate and data in Processing Tree
+  owner }
+
+class _WrappedDelegateProvider extends BuildCoordinator {
+  final DelegateProvider _provider;
+
+  _WrappedDelegateProvider(this._provider);
+
+  @override
+  ParsedItemType itemType(String name) => ParsedItemType.owner;
+
+  @override
+  PNDelegate? delegate(String name) => _provider.delegate(name);
+
+  @override
+  delegateData(String delegateName, Map<String, dynamic> rawData) =>
+      _provider.delegateData(delegateName, rawData);
+}
+
+/// Interface which further extends [DelegateProvider] to return information
+/// about folding tree nodes.
+///
+/// If for some reasons tree contains nodes which while processing are
+/// identified as values (const or changeable) which will not perform any
+/// actions those items will not be built into tree as a processing node, rather
+/// calculated and added to parent [data] collection as computed.
+abstract class BuildCoordinator extends DelegateProvider {
+  ParsedItemType itemType(String name);
+
+  static fromProvider(DelegateProvider provider) =>
+      _WrappedDelegateProvider(provider);
+}
+
 class _ParsedItem {
+  final String name;
   final PNDelegate delegate;
   final dynamic data;
   final bool isLeaf;
+  final ParsedItemType type;
 
-  _ParsedItem(this.delegate, this.data, this.isLeaf);
+  _ParsedItem(this.name, this.delegate, this.data, this.isLeaf, this.type);
 }
 
 class XmlTreeBuilder {
   TreeProcessor? _processor;
-  final DelegateProvider provider;
+  final BuildCoordinator provider;
 
-  XmlTreeBuilder(this.provider);
+  XmlTreeBuilder(DelegateProvider provider)
+      : provider = BuildCoordinator.fromProvider(provider);
+
+  XmlTreeBuilder.coordinated(this.provider);
 
   /// Returns object which might be used to execute processing tree.
   /// If xml fail to parse, then [XmlParserException] is thrown. If xml is
@@ -288,22 +343,44 @@ class XmlTreeBuilder {
     if (delegate == null) {
       throw TreeBuilderException("No delegate for xml node name '$nodeName'");
     }
-    return _ParsedItem(delegate, data, xmlElement.firstElementChild == null);
+    final isLeaf = xmlElement.firstElementChild == null;
+    final type = provider.itemType(nodeName);
+    if (type == ParsedItemType.constValue && !isLeaf){
+      throw TreeBuilderException("$nodeName: constValue must be a leaf!");
+    }
+    return _ParsedItem(nodeName, delegate, data, isLeaf, type);
   }
 
   void _processSubLevel(
       XmlElement xmlElement, StackedTreeBuilder builder, bool popLevelAtEnd) {
     for (var subElement in xmlElement.childElements) {
       final _ParsedItem item = _processElement(subElement);
-      if (item.isLeaf) {
-        builder.addChild(item.delegate, item.data);
+
+      //See documentation of ParsedItemType for details
+      if (item.type == ParsedItemType.constValue) {
+        _handleAsConstValue(builder, item);
+        continue;
+
       } else {
-        builder.push(item.delegate, item.data);
-        _processSubLevel(subElement, builder, true);
-        if (popLevelAtEnd) {
-          builder.levelUp();
+        if (item.isLeaf) {
+          builder.addChild(item.delegate, item.data);
+        } else {
+          builder.push(item.delegate, item.data);
+          _processSubLevel(subElement, builder, true);
+          if (popLevelAtEnd) {
+            builder.levelUp();
+          }
         }
       }
     }
+  }
+
+  void _handleAsConstValue(StackedTreeBuilder builder, _ParsedItem item) {
+    List<dynamic> result = [];
+    if (item.delegate(result, item.data) != Action.proceed) {
+      throw TreeBuilderException(
+          "Delegate for ${item.name} didn't return Action.proceed");
+    }
+    builder._current.data[item.name] = result.first;
   }
 }

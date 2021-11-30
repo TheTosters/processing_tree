@@ -7,6 +7,12 @@
 /// all input data which will be processed should be already gathered.
 library processing_tree;
 
-export 'tree_builder.dart' show TreeBuilder, StackedTreeBuilder, XmlTreeBuilder;
+export 'tree_builder.dart'
+    show
+        TreeBuilder,
+        StackedTreeBuilder,
+        XmlTreeBuilder,
+        BuildCoordinator,
+        ParsedItemType;
 export 'tree_processor.dart' show TreeProcessor;
 export 'processing_node.dart' show Action, PNDelegate;

@@ -1,5 +1,3 @@
-library processing_tree;
-
 /// Informs caller of next action which should take place after processing
 /// current node
 enum Action {
@@ -50,78 +48,4 @@ class ProcessingNode {
   bool mark = false;
 
   ProcessingNode(this.delegate, this.children, this.data);
-}
-
-/// Private execution controller for processing tree
-///
-/// Class responsible for perform execution of nodes in tree. It controls
-/// passing needed data and handling [Action] returned by executed node.
-class ProcessingContext {
-  final List<ProcessingNode> _callStack = [];
-
-  void process(ProcessingNode rootNode, dynamic extContext) {
-    rootNode.mark = false;
-    _callStack.add(rootNode);
-    while (_callStack.isNotEmpty) {
-      final toExecute = _callStack.removeLast();
-
-      toExecute.mark = false; //Always reset mark before execution
-      late Action nextAction;
-      do {
-        nextAction = toExecute.delegate(extContext, toExecute.data);
-      } while (nextAction == Action.repeat);
-
-      _handleNextAction(nextAction, toExecute);
-    }
-  }
-
-  void reset() {
-    _callStack.clear();
-  }
-
-  void _handleNextAction(Action nextAction, ProcessingNode lastExecuted) {
-    switch (nextAction) {
-      case Action.proceed:
-        _callStack.addAll(lastExecuted.children.reversed);
-        break;
-
-      case Action.markAndProceed:
-        //Mark has only meaning when it has children, otherwise no one can
-        //return to marked place
-        if (lastExecuted.children.isNotEmpty) {
-          lastExecuted.mark = true;
-          _callStack.add(lastExecuted);
-          _callStack.addAll(lastExecuted.children.reversed);
-        }
-        break;
-
-      case Action.repeat:
-        assert(false, "How we get here?!");
-        break;
-
-      case Action.backToMark:
-        _removeUntilFirstMark();
-        break;
-
-      case Action.terminateBranch:
-        //We stop this execution branch here, don't process children
-        break;
-
-      case Action.terminate:
-        //Whole tree execution should be stopped, just wipe out callstack
-        _callStack.clear();
-        break;
-    }
-  }
-
-  /// NOTE: This might throw Exception if [_callstack] goes dry. This is
-  /// expected because this mean that processing tree is malformed. If any node
-  /// wants back to mark, then it must be sure that mark is already placed
-  void _removeUntilFirstMark() {
-    ProcessingNode node = _callStack.removeLast();
-    while (!node.mark) {
-      node = _callStack.removeLast();
-    }
-    _callStack.add(node); //return back marked node to stack
-  }
 }
