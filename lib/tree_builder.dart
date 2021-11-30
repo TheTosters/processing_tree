@@ -329,7 +329,7 @@ class XmlTreeBuilder {
   }
 
   Map<String, dynamic> _extractArguments(XmlElement xmlElement) {
-    final Map<String, String> inData = {};
+    final Map<String, dynamic> inData = <String, dynamic>{};
     for (var attr in xmlElement.attributes) {
       inData[attr.name.toString()] = attr.value;
     }
