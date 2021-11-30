@@ -244,8 +244,8 @@ enum ParsedItemType {
   /// [data] collection. Item marked with this type will not create node in
   /// processing tree, it must be a leaf!
   ///
-  /// *Contract #1:* delegate of constValue takes List<dynamic> as a context,
-  /// and adds result which will to be stored in parent data.
+  /// *Contract #1:* delegate of constValue takes KeyValue object as a context
+  /// and can change name/value fields as needed.
   ///
   /// *Contract #2:* Parent data is not null and it conforms to
   /// operator [](String name)=dynamic. To store result of delegate call.
@@ -376,11 +376,18 @@ class XmlTreeBuilder {
   }
 
   void _handleAsConstValue(StackedTreeBuilder builder, _ParsedItem item) {
-    List<dynamic> result = [];
+    KeyValue result = KeyValue(item.name, null);
     if (item.delegate(result, item.data) != Action.proceed) {
       throw TreeBuilderException(
           "Delegate for ${item.name} didn't return Action.proceed");
     }
-    builder._current.data[item.name] = result.first;
+    builder._current.data[result.key] = result.value;
   }
+}
+
+class KeyValue {
+  String key;
+  dynamic value;
+
+  KeyValue(this.key, this.value);
 }

@@ -13,6 +13,7 @@ export 'tree_builder.dart'
         StackedTreeBuilder,
         XmlTreeBuilder,
         BuildCoordinator,
-        ParsedItemType;
+        ParsedItemType,
+        KeyValue;
 export 'tree_processor.dart' show TreeProcessor;
 export 'processing_node.dart' show Action, PNDelegate;

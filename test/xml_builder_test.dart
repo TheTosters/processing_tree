@@ -48,7 +48,7 @@ class SimpleCoordinator extends BuildCoordinator{
   }
 
   Action _constDelegate(context, data) {
-    context.add(data["value"]);
+    context.value = data["value"];
     return Action.proceed;
   }
 }
