@@ -358,7 +358,7 @@ class XmlTreeBuilder {
 
       //See documentation of ParsedItemType for details
       if (item.type == ParsedItemType.constValue) {
-        _handleAsConstValue(builder, item);
+        _handleAsConstValue(xmlElement.name.toString(), builder, item);
         continue;
 
       } else {
@@ -375,8 +375,9 @@ class XmlTreeBuilder {
     }
   }
 
-  void _handleAsConstValue(StackedTreeBuilder builder, _ParsedItem item) {
-    KeyValue result = KeyValue(item.name, null);
+  void _handleAsConstValue(String parentName, StackedTreeBuilder builder,
+      _ParsedItem item) {
+    KeyValue result = KeyValue(parentName, item.name, null);
     if (item.delegate(result, item.data) != Action.proceed) {
       throw TreeBuilderException(
           "Delegate for ${item.name} didn't return Action.proceed");
@@ -386,8 +387,9 @@ class XmlTreeBuilder {
 }
 
 class KeyValue {
+  final String parentName;
   String key;
   dynamic value;
 
-  KeyValue(this.key, this.value);
+  KeyValue(this.parentName, this.key, this.value);
 }
