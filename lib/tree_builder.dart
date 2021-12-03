@@ -256,7 +256,8 @@ enum ParsedItemType {
 
   /// This is node which is part of algorithm, it should be represented as
   /// a delegate and data in Processing Tree
-  owner }
+  owner
+}
 
 class _WrappedDelegateProvider extends BuildCoordinator {
   final DelegateProvider _provider;
@@ -282,6 +283,10 @@ class _WrappedDelegateProvider extends BuildCoordinator {
 /// actions those items will not be built into tree as a processing node, rather
 /// calculated and added to parent [data] collection as computed.
 abstract class BuildCoordinator extends DelegateProvider {
+  /// Name of xml node which children are currently processed. For root node
+  /// this is set to empty string
+  String parentNodeName = "";
+
   ParsedItemType itemType(String name);
 
   static fromProvider(DelegateProvider provider) =>
@@ -300,12 +305,12 @@ class _ParsedItem {
 
 class XmlTreeBuilder {
   TreeProcessor? _processor;
-  final BuildCoordinator provider;
+  final BuildCoordinator coordinator;
 
   XmlTreeBuilder(DelegateProvider provider)
-      : provider = BuildCoordinator.fromProvider(provider);
+      : coordinator = BuildCoordinator.fromProvider(provider);
 
-  XmlTreeBuilder.coordinated(this.provider);
+  XmlTreeBuilder.coordinated(this.coordinator);
 
   /// Returns object which might be used to execute processing tree.
   /// If xml fail to parse, then [XmlParserException] is thrown. If xml is
@@ -322,6 +327,7 @@ class XmlTreeBuilder {
   void _parseXml(String xmlStr) {
     final xmlDoc = XmlDocument.parse(xmlStr);
     XmlElement xmlElement = xmlDoc.rootElement;
+    coordinator.parentNodeName = "";
     final _ParsedItem item = _processElement(xmlElement);
     StackedTreeBuilder builder = StackedTreeBuilder(item.delegate, item.data);
     _processSubLevel(xmlElement, builder, false);
@@ -338,14 +344,15 @@ class XmlTreeBuilder {
 
   _ParsedItem _processElement(XmlElement xmlElement) {
     final nodeName = xmlElement.name.toString();
-    final delegate = provider.delegate(nodeName);
-    final data = provider.delegateData(nodeName, _extractArguments(xmlElement));
+    final delegate = coordinator.delegate(nodeName);
+    final data =
+        coordinator.delegateData(nodeName, _extractArguments(xmlElement));
     if (delegate == null) {
       throw TreeBuilderException("No delegate for xml node name '$nodeName'");
     }
     final isLeaf = xmlElement.firstElementChild == null;
-    final type = provider.itemType(nodeName);
-    if (type == ParsedItemType.constValue && !isLeaf){
+    final type = coordinator.itemType(nodeName);
+    if (type == ParsedItemType.constValue && !isLeaf) {
       throw TreeBuilderException("$nodeName: constValue must be a leaf!");
     }
     return _ParsedItem(nodeName, delegate, data, isLeaf, type);
@@ -353,14 +360,14 @@ class XmlTreeBuilder {
 
   void _processSubLevel(
       XmlElement xmlElement, StackedTreeBuilder builder, bool popLevelAtEnd) {
+    coordinator.parentNodeName = xmlElement.name.toString();
     for (var subElement in xmlElement.childElements) {
       final _ParsedItem item = _processElement(subElement);
 
       //See documentation of ParsedItemType for details
       if (item.type == ParsedItemType.constValue) {
-        _handleAsConstValue(xmlElement.name.toString(), builder, item);
+        _handleAsConstValue(builder, item);
         continue;
-
       } else {
         if (item.isLeaf) {
           builder.addChild(item.delegate, item.data);
@@ -375,9 +382,8 @@ class XmlTreeBuilder {
     }
   }
 
-  void _handleAsConstValue(String parentName, StackedTreeBuilder builder,
-      _ParsedItem item) {
-    KeyValue result = KeyValue(parentName, item.name, null);
+  void _handleAsConstValue(StackedTreeBuilder builder, _ParsedItem item) {
+    KeyValue result = KeyValue(item.name, null);
     if (item.delegate(result, item.data) != Action.proceed) {
       throw TreeBuilderException(
           "Delegate for ${item.name} didn't return Action.proceed");
@@ -387,9 +393,8 @@ class XmlTreeBuilder {
 }
 
 class KeyValue {
-  final String parentName;
   String key;
   dynamic value;
 
-  KeyValue(this.parentName, this.key, this.value);
+  KeyValue(this.key, this.value);
 }
