@@ -273,6 +273,24 @@ class _WrappedDelegateProvider extends BuildCoordinator {
   @override
   delegateData(String delegateName, Map<String, dynamic> rawData) =>
       _provider.delegateData(delegateName, rawData);
+
+  @override
+  void step(BuildAction action, String nodeName) {
+    // Nothing
+  }
+}
+
+/// Informs [BuildCoordinator] about new step in parse process
+enum BuildAction {
+  /// New item is about to be processed. This action is before any other call
+  /// to coordinator
+  newItem,
+
+  /// Start processing of children of current item
+  goLevelDown,
+
+  /// Processing of children finished, returning to previous level
+  goLevelUp
 }
 
 /// Interface which further extends [DelegateProvider] to return information
@@ -288,6 +306,8 @@ abstract class BuildCoordinator extends DelegateProvider {
   String parentNodeName = "";
 
   ParsedItemType itemType(String name);
+
+  void step(BuildAction action, String nodeName);
 
   static fromProvider(DelegateProvider provider) =>
       _WrappedDelegateProvider(provider);
@@ -344,6 +364,7 @@ class XmlTreeBuilder {
 
   _ParsedItem _processElement(XmlElement xmlElement) {
     final nodeName = xmlElement.name.toString();
+    coordinator.step(BuildAction.newItem, nodeName);
     final delegate = coordinator.delegate(nodeName);
     final data =
         coordinator.delegateData(nodeName, _extractArguments(xmlElement));
@@ -373,9 +394,11 @@ class XmlTreeBuilder {
           builder.addChild(item.delegate, item.data);
         } else {
           builder.push(item.delegate, item.data);
+          coordinator.step(BuildAction.goLevelDown, xmlElement.name.toString());
           _processSubLevel(subElement, builder, true);
           if (popLevelAtEnd) {
             builder.levelUp();
+            coordinator.step(BuildAction.goLevelUp, xmlElement.name.toString());
           }
         }
       }

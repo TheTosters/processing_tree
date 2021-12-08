@@ -51,6 +51,11 @@ class SimpleCoordinator extends BuildCoordinator{
     context.value = data["value"];
     return Action.proceed;
   }
+
+  @override
+  void step(BuildAction action, String nodeName) {
+    // TODO: implement step
+  }
 }
 
 class NoDelegateProvider extends DelegateProvider {
