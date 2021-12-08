@@ -14,6 +14,7 @@ export 'tree_builder.dart'
         XmlTreeBuilder,
         BuildCoordinator,
         ParsedItemType,
-        KeyValue;
+        KeyValue,
+        BuildAction;
 export 'tree_processor.dart' show TreeProcessor;
 export 'processing_node.dart' show Action, PNDelegate;
