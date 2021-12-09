@@ -5,10 +5,10 @@ import 'package:processing_tree/tree_builder.dart';
 import 'package:test/test.dart';
 import 'package:xml/xml.dart';
 
-class SimpleCoordinator extends BuildCoordinator{
+class SimpleCoordinator extends BuildCoordinator {
   @override
   PNDelegate? delegate(String name) {
-    switch(name) {
+    switch (name) {
       case "xml":
         return _copyDelegate;
       case "const":
@@ -20,9 +20,9 @@ class SimpleCoordinator extends BuildCoordinator{
 
   @override
   delegateData(String delegateName, Map<String, dynamic> rawData) {
-    switch(delegateName) {
+    switch (delegateName) {
       case "xml":
-        return <String,dynamic>{};
+        return <String, dynamic>{};
       case "const":
         return rawData;
       default:
@@ -32,7 +32,7 @@ class SimpleCoordinator extends BuildCoordinator{
 
   @override
   ParsedItemType itemType(String name) {
-    switch(name) {
+    switch (name) {
       case "xml":
         return ParsedItemType.owner;
       case "const":
@@ -58,6 +58,41 @@ class SimpleCoordinator extends BuildCoordinator{
   }
 }
 
+class ConstValCoordinator extends BuildCoordinator {
+  List<String> actions = [];
+
+  @override
+  PNDelegate? delegate(String name) {
+    return name == "xml" ? _copyDelegate : _constDelegate;
+  }
+
+  Action _copyDelegate(context, data) {
+    context.addAll(data);
+    return Action.proceed;
+  }
+
+  Action _constDelegate(context, data) {
+    if (context.value != null && context.value is Map) {
+      context.value = context.value.entries.join(",") + data["value"];
+    } else {
+      context.value = data["value"];
+    }
+    return Action.proceed;
+  }
+
+  @override
+  delegateData(String delegateName, Map<String, dynamic> rawData) => rawData;
+
+  @override
+  ParsedItemType itemType(String name) =>
+      name == "xml" ? ParsedItemType.owner : ParsedItemType.constValue;
+
+  @override
+  void step(BuildAction action, String nodeName) {
+    actions.add("$action|$nodeName");
+  }
+}
+
 class NoDelegateProvider extends DelegateProvider {
   @override
   PNDelegate? delegate(String name) => null;
@@ -77,7 +112,7 @@ class MarkedDelegateProvider extends DelegateProvider {
 
   @override
   delegateData(String delegateName, Map<String, dynamic> rawData) {
-    for(var entry in rawData.entries) {
+    for (var entry in rawData.entries) {
       names.add(entry.key + ":" + entry.value);
     }
     return null;
@@ -88,7 +123,8 @@ void main() {
   test("No delegate", () {
     //it's illegal to have no delegate returned by provider
     XmlTreeBuilder builder = XmlTreeBuilder(NoDelegateProvider());
-    expect(() => builder.build("<xml/>"), throwsA((e) => e is TreeBuilderException));
+    expect(() => builder.build("<xml/>"),
+        throwsA((e) => e is TreeBuilderException));
   });
 
   test("Check calls to provider", () {
@@ -109,10 +145,11 @@ void main() {
 
   test("Malformed xml", () {
     XmlTreeBuilder builder = XmlTreeBuilder(NoDelegateProvider());
-    expect(() => builder.build("<xml/"), throwsA((e) => e is XmlParserException));
+    expect(
+        () => builder.build("<xml/"), throwsA((e) => e is XmlParserException));
   });
 
-  test("Coordinated - constValue not a leaf", (){
+  test("Coordinated - constValue not a leaf", () {
     //ConstValue node must be a leaf
     XmlTreeBuilder builder = XmlTreeBuilder.coordinated(SimpleCoordinator());
     var xml = '''
@@ -125,7 +162,7 @@ void main() {
     expect(() => builder.build(xml), throwsA((e) => e is TreeBuilderException));
   });
 
-  test("Coordinated - consume constants", (){
+  test("Coordinated - consume constants", () {
     //values should not create nodes in processing tree
     XmlTreeBuilder builder = XmlTreeBuilder.coordinated(SimpleCoordinator());
     var prc = builder.build('''
@@ -136,5 +173,80 @@ void main() {
     Map<String, dynamic> result = {};
     prc.process(result);
     expect(result["const"], "const_val");
+  });
+
+  test("Coordinated - consume stacked constants", () {
+    final c = ConstValCoordinator();
+    XmlTreeBuilder builder = XmlTreeBuilder.coordinated(c);
+    var prc = builder.build('''
+      <xml>
+        <constA value="const_val_lvl1">
+          <constB value="const_val_lvl2">
+            <constC value="const_val_lvl3"/>
+          </constB>
+        </constA>
+      </xml>
+    ''');
+    Map<String, dynamic> result = {};
+    prc.process(result);
+    expect(result["constA"],
+        "MapEntry(constB: MapEntry(constC: const_val_lvl3)const_val_lvl2)const_val_lvl1");
+    final expAct = [
+      "BuildAction.newItem|xml",
+      "BuildAction.newItem|constA",
+      "BuildAction.goLevelDown|constA",
+      "BuildAction.newItem|constB",
+      "BuildAction.goLevelDown|constB",
+      "BuildAction.newItem|constC",
+      "BuildAction.finaliseConstVal|constC",
+      "BuildAction.goLevelUp|constB",
+      "BuildAction.finaliseConstVal|constB",
+      "BuildAction.goLevelUp|constA",
+      "BuildAction.finaliseConstVal|constA"
+    ];
+    Function equals = const ListEquality().equals;
+    expect(equals(c.actions, expAct), true);
+  });
+
+  test("Coordinated - consume siblings constants", () {
+    final c = ConstValCoordinator();
+    XmlTreeBuilder builder = XmlTreeBuilder.coordinated(c);
+    var prc = builder.build('''
+      <xml>
+        <constA value="const_val_lvl1">
+          <constB value="const_val_lvl2"/>
+          <constC value="const_val_lvl3"/>
+        </constA>
+      </xml>
+    ''');
+    Map<String, dynamic> result = {};
+    prc.process(result);
+    expect(result["constA"],
+        "MapEntry(constB: const_val_lvl2),MapEntry(constC: const_val_lvl3)const_val_lvl1");
+    final expAct = [
+      "BuildAction.newItem|xml",
+      "BuildAction.newItem|constA",
+      "BuildAction.goLevelDown|constA",
+      "BuildAction.newItem|constB",
+      "BuildAction.finaliseConstVal|constB",
+      "BuildAction.newItem|constC",
+      "BuildAction.finaliseConstVal|constC",
+      "BuildAction.goLevelUp|constA",
+      "BuildAction.finaliseConstVal|constA"
+    ];
+    Function equals = const ListEquality().equals;
+    expect(equals(c.actions, expAct), true);
+  });
+
+  test("Coordinated - Illegal owner / constVal mix", () {
+    XmlTreeBuilder builder = XmlTreeBuilder.coordinated(ConstValCoordinator());
+    final xml = '''
+      <xml>
+        <constA value="const_val_lvl1">
+          <xml/>
+        </constA>
+      </xml>
+    ''';
+    expect(() => builder.build(xml), throwsA((e) => e is TreeBuilderException));
   });
 }
