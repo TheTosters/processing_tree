@@ -7,38 +7,16 @@ import 'package:xml/xml.dart';
 
 class SimpleCoordinator extends BuildCoordinator {
   @override
-  PNDelegate? delegate(String name) {
-    switch (name) {
+  ParsedItem requestData(BuildPhaseState state) {
+    switch (state.delegateName) {
       case "xml":
-        return _copyDelegate;
+        return ParsedItem.from(
+            state, _copyDelegate, <String, dynamic>{}, ParsedItemType.owner);
       case "const":
-        return _constDelegate;
+        return ParsedItem.from(
+            state, _constDelegate, state.data, ParsedItemType.constValue);
       default:
-        return null;
-    }
-  }
-
-  @override
-  delegateData(String delegateName, Map<String, dynamic> rawData) {
-    switch (delegateName) {
-      case "xml":
-        return <String, dynamic>{};
-      case "const":
-        return rawData;
-      default:
-        return ParsedItemType.owner;
-    }
-  }
-
-  @override
-  ParsedItemType itemType(String name) {
-    switch (name) {
-      case "xml":
-        return ParsedItemType.owner;
-      case "const":
-        return ParsedItemType.constValue;
-      default:
-        return ParsedItemType.owner;
+        throw Exception("Upsii");
     }
   }
 
@@ -53,7 +31,7 @@ class SimpleCoordinator extends BuildCoordinator {
   }
 
   @override
-  void step(BuildAction action, String nodeName) {
+  void step(BuildAction action, ParsedItem item) {
     // TODO: implement step
   }
 }
@@ -62,8 +40,14 @@ class ConstValCoordinator extends BuildCoordinator {
   List<String> actions = [];
 
   @override
-  PNDelegate? delegate(String name) {
-    return name == "xml" ? _copyDelegate : _constDelegate;
+  ParsedItem requestData(BuildPhaseState state) {
+    if (state.delegateName == "xml") {
+      return ParsedItem.from(
+          state, _copyDelegate, state.data, ParsedItemType.owner);
+    } else {
+      return ParsedItem.from(
+          state, _constDelegate, state.data, ParsedItemType.constValue);
+    }
   }
 
   Action _copyDelegate(context, data) {
@@ -81,15 +65,8 @@ class ConstValCoordinator extends BuildCoordinator {
   }
 
   @override
-  delegateData(String delegateName, Map<String, dynamic> rawData) => rawData;
-
-  @override
-  ParsedItemType itemType(String name) =>
-      name == "xml" ? ParsedItemType.owner : ParsedItemType.constValue;
-
-  @override
-  void step(BuildAction action, String nodeName) {
-    actions.add("$action|$nodeName");
+  void step(BuildAction action, ParsedItem item) {
+    actions.add("$action|${item.name}");
   }
 }
 
@@ -123,8 +100,7 @@ void main() {
   test("No delegate", () {
     //it's illegal to have no delegate returned by provider
     XmlTreeBuilder builder = XmlTreeBuilder(NoDelegateProvider());
-    expect(() => builder.build("<xml/>"),
-        throwsA((e) => e is TreeBuilderException));
+    expect(() => builder.build("<xml/>"), throwsA((e) => true));
   });
 
   test("Check calls to provider", () {
@@ -147,19 +123,6 @@ void main() {
     XmlTreeBuilder builder = XmlTreeBuilder(NoDelegateProvider());
     expect(
         () => builder.build("<xml/"), throwsA((e) => e is XmlParserException));
-  });
-
-  test("Coordinated - constValue not a leaf", () {
-    //ConstValue node must be a leaf
-    XmlTreeBuilder builder = XmlTreeBuilder.coordinated(SimpleCoordinator());
-    var xml = '''
-      <xml>
-        <const _trr1="attr">
-          <UnAllowed/>
-        </const>
-      </xml>
-    ''';
-    expect(() => builder.build(xml), throwsA((e) => e is TreeBuilderException));
   });
 
   test("Coordinated - consume constants", () {

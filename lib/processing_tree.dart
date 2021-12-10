@@ -15,6 +15,7 @@ export 'tree_builder.dart'
         BuildCoordinator,
         ParsedItemType,
         KeyValue,
-        BuildAction;
+        BuildAction,
+        ParsedItem;
 export 'tree_processor.dart' show TreeProcessor;
 export 'processing_node.dart' show Action, PNDelegate;

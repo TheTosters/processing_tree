@@ -2,7 +2,8 @@
 
 - Extend XmlTreeBuilder to allow coordinated build.
 - Introduce BuildCoordinator interface as an extension of DelegateProvider.
-- ConstValues node delegate get info about it parent while parsing xml
+- ConstValues node delegate get info about it parent while parsing xml.
+- ConstValues can have children.
 
 ## 0.1.1
 

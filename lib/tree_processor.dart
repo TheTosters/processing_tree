@@ -86,8 +86,8 @@ class ProcessingContext {
         break;
 
       case Action.markAndProceed:
-      //Mark has only meaning when it has children, otherwise no one can
-      //return to marked place
+        //Mark has only meaning when it has children, otherwise no one can
+        //return to marked place
         if (lastExecuted.children.isNotEmpty) {
           lastExecuted.mark = true;
           _callStack.add(lastExecuted);
@@ -104,11 +104,11 @@ class ProcessingContext {
         break;
 
       case Action.terminateBranch:
-      //We stop this execution branch here, don't process children
+        //We stop this execution branch here, don't process children
         break;
 
       case Action.terminate:
-      //Whole tree execution should be stopped, just wipe out callstack
+        //Whole tree execution should be stopped, just wipe out callstack
         _callStack.clear();
         break;
     }
@@ -155,10 +155,10 @@ class InvertedProcessingContext {
     }
 
     assert(nextAction != Action.markAndProceed,
-      "Marks have no meaning in inverted execution.");
+        "Marks have no meaning in inverted execution.");
     assert(nextAction != Action.backToMark,
-      "Can't return to mark in inverted execution.");
+        "Can't return to mark in inverted execution.");
     assert(nextAction != Action.terminateBranch,
-      "Can't terminate already processed branch in inverted execution.");
+        "Can't terminate already processed branch in inverted execution.");
   }
 }

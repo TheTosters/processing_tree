@@ -268,18 +268,15 @@ class _WrappedDelegateProvider extends BuildCoordinator {
   _WrappedDelegateProvider(this._provider);
 
   @override
-  ParsedItemType itemType(String name) => ParsedItemType.owner;
-
-  @override
-  PNDelegate? delegate(String name) => _provider.delegate(name);
-
-  @override
-  delegateData(String delegateName, Map<String, dynamic> rawData) =>
-      _provider.delegateData(delegateName, rawData);
-
-  @override
-  void step(BuildAction action, String nodeName) {
+  void step(BuildAction action, ParsedItem item) {
     // Nothing
+  }
+
+  @override
+  ParsedItem requestData(BuildPhaseState state) {
+    final delegate = _provider.delegate(state.delegateName)!;
+    final data = _provider.delegateData(state.delegateName, state.data);
+    return ParsedItem.from(state, delegate, data, ParsedItemType.owner);
   }
 }
 
@@ -299,39 +296,62 @@ enum BuildAction {
   goLevelUp
 }
 
-/// Interface which further extends [DelegateProvider] to return information
+/// More advanced interface than [DelegateProvider] to return information
 /// about folding tree nodes.
-///
-/// If for some reasons tree contains nodes which while processing are
-/// identified as values (const or changeable) which will not perform any
-/// actions those items will not be built into tree as a processing node, rather
-/// calculated and added to parent [data] collection as computed.
-abstract class BuildCoordinator extends DelegateProvider {
-  /// Name of xml node which children are currently processed. For root node
-  /// this is set to empty string
-  String parentNodeName = "";
+abstract class BuildCoordinator {
+  ParsedItem requestData(BuildPhaseState state);
 
-  ParsedItemType itemType(String name);
-
-  void step(BuildAction action, String nodeName);
+  void step(BuildAction action, ParsedItem item);
 
   static fromProvider(DelegateProvider provider) =>
       _WrappedDelegateProvider(provider);
 }
 
-class _ParsedItem {
+class ParsedItem {
   final String name;
   final PNDelegate delegate;
   final dynamic data;
   final bool isLeaf;
   final ParsedItemType type;
 
-  _ParsedItem(this.name, this.delegate, this.data, this.isLeaf, this.type);
+  /// Anything coordinator gives, it's transparent for builder, it's not later
+  /// passed to resulting processing tree.
+  final dynamic extObj;
+
+  ParsedItem.from(BuildPhaseState state, this.delegate, this.data, this.type,
+      {this.extObj})
+      : name = state.delegateName,
+        isLeaf = state.isLeaf;
+}
+
+class BuildPhaseState {
+  /// Name of xml node which children are currently processed. For root node
+  /// this is set to empty string
+  final String parentNodeName;
+
+  /// Name of xml node which is currently processed.
+  final String delegateName;
+
+  /// Current depth of const value branch. Zero means we in owner node
+  final int constValDepth;
+
+  /// True if current node has no children (end of branch)
+  final bool isLeaf;
+
+  /// Collected attributes from xml node
+  final Map<String, dynamic> data;
+
+  /// True if parsing is inside ConstValues branch of tree
+  bool get isProcessingConstValues => constValDepth > 0;
+
+  BuildPhaseState(this.parentNodeName, this.delegateName, this.constValDepth,
+      this.isLeaf, this.data);
 }
 
 class XmlTreeBuilder {
   TreeProcessor? _processor;
   final BuildCoordinator coordinator;
+
   //if >0 then only constVal nodes are accepted, other will throw an exception
   int constValDepth = 0;
 
@@ -355,8 +375,7 @@ class XmlTreeBuilder {
   void _parseXml(String xmlStr) {
     final xmlDoc = XmlDocument.parse(xmlStr);
     XmlElement xmlElement = xmlDoc.rootElement;
-    coordinator.parentNodeName = "";
-    final _ParsedItem item = _processElement(xmlElement);
+    final ParsedItem item = _processElement(xmlElement);
     StackedTreeBuilder builder = StackedTreeBuilder(item.delegate, item.data);
     _processSubLevel(xmlElement, builder, false);
     _processor = builder.build();
@@ -370,69 +389,64 @@ class XmlTreeBuilder {
     return inData;
   }
 
-  _ParsedItem _processElement(XmlElement xmlElement) {
-    final nodeName = xmlElement.name.toString();
-    coordinator.step(BuildAction.newItem, nodeName);
-    final delegate = coordinator.delegate(nodeName);
-    final data =
-        coordinator.delegateData(nodeName, _extractArguments(xmlElement));
-    if (delegate == null) {
-      throw TreeBuilderException("No delegate for xml node name '$nodeName'");
-    }
-    final isLeaf = xmlElement.firstElementChild == null;
-    final type = coordinator.itemType(nodeName);
-    if (type != ParsedItemType.constValue && constValDepth > 0) {
+  ParsedItem _processElement(XmlElement xmlElement) {
+    BuildPhaseState state = BuildPhaseState(
+        xmlElement.parentElement?.name.toString() ?? "",
+        xmlElement.name.toString(),
+        constValDepth,
+        xmlElement.firstElementChild == null,
+        _extractArguments(xmlElement));
+    final ParsedItem item = coordinator.requestData(state);
+    if (item.type != ParsedItemType.constValue && constValDepth > 0) {
       throw TreeBuilderException(
-          "$nodeName: constValue node can't have non constVal nodes!");
+          "${item.name}: constValue node can't have non constVal nodes!");
     }
-    return _ParsedItem(nodeName, delegate, data, isLeaf, type);
+    coordinator.step(BuildAction.newItem, item);
+    return item;
   }
 
   void _processSubLevel(
       XmlElement xmlElement, StackedTreeBuilder builder, bool popLevelAtEnd) {
     for (var subElement in xmlElement.childElements) {
-      coordinator.parentNodeName = xmlElement.name.toString();
-      final _ParsedItem item = _processElement(subElement);
+      final ParsedItem item = _processElement(subElement);
 
       //See documentation of ParsedItemType for details
       if (item.type == ParsedItemType.constValue) {
         final result = _handleAsConstValue(subElement, item);
         builder._current.data[result.key] = result.value;
         continue;
-
       } else {
         if (item.isLeaf) {
           builder.addChild(item.delegate, item.data);
         } else {
           builder.push(item.delegate, item.data);
-          coordinator.step(BuildAction.goLevelDown, item.name);
+          coordinator.step(BuildAction.goLevelDown, item);
           _processSubLevel(subElement, builder, true);
           if (popLevelAtEnd) {
             builder.levelUp();
-            coordinator.step(BuildAction.goLevelUp, item.name);
+            coordinator.step(BuildAction.goLevelUp, item);
           }
         }
       }
     }
   }
 
-  KeyValue _handleAsConstValue(XmlElement xmlElement, _ParsedItem item) {
+  KeyValue _handleAsConstValue(XmlElement xmlElement, ParsedItem item) {
     constValDepth++;
     final KeyValue result = KeyValue(item.name, null);
     if (!item.isLeaf) {
-      coordinator.step(BuildAction.goLevelDown, item.name);
+      coordinator.step(BuildAction.goLevelDown, item);
 
       result.value = <String, dynamic>{};
       for (var subElement in xmlElement.childElements) {
-        coordinator.parentNodeName = xmlElement.name.toString();
-        final _ParsedItem subItem = _processElement(subElement);
+        final ParsedItem subItem = _processElement(subElement);
         final subResult = _handleAsConstValue(subElement, subItem);
         if (subResult.value != null) {
           result.value[subResult.key] = subResult.value;
         }
       }
 
-      coordinator.step(BuildAction.goLevelUp, item.name);
+      coordinator.step(BuildAction.goLevelUp, item);
     }
 
     if (item.delegate(result, item.data) != Action.proceed) {
@@ -440,7 +454,7 @@ class XmlTreeBuilder {
           "Delegate for ${item.name} didn't return Action.proceed");
     }
     constValDepth--;
-    coordinator.step(BuildAction.finaliseConstVal, item.name);
+    coordinator.step(BuildAction.finaliseConstVal, item);
     return result;
   }
 }
