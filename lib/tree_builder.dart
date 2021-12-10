@@ -372,9 +372,20 @@ class XmlTreeBuilder {
     return _processor!;
   }
 
+  TreeProcessor buildFrom(XmlElement xmlElement) {
+    _parseXmlRoot(xmlElement);
+    if (_processor == null) {
+      throw TreeBuilderException("Unable to build tree.");
+    }
+    return _processor!;
+  }
+
   void _parseXml(String xmlStr) {
     final xmlDoc = XmlDocument.parse(xmlStr);
-    XmlElement xmlElement = xmlDoc.rootElement;
+    _parseXmlRoot(xmlDoc.rootElement);
+  }
+
+  void _parseXmlRoot(XmlElement xmlElement) {
     final ParsedItem item = _processElement(xmlElement);
     StackedTreeBuilder builder = StackedTreeBuilder(item.delegate, item.data);
     _processSubLevel(xmlElement, builder, false);
