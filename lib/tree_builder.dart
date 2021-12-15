@@ -285,9 +285,9 @@ enum BuildAction {
   /// New item which is owner type is about to be processed. This action is
   /// before any other call to coordinator
   newItem,
-
-  /// ConstVal item was just finalised, no more actions for it will be done.
-  finaliseConstVal,
+  
+  /// Item was just finalised, no more actions for it will be done.
+  finaliseItem,
 
   /// Start processing of children of current item
   goLevelDown,
@@ -389,6 +389,7 @@ class XmlTreeBuilder {
     final ParsedItem item = _processElement(xmlElement);
     StackedTreeBuilder builder = StackedTreeBuilder(item.delegate, item.data);
     _processSubLevel(xmlElement, builder, false);
+    coordinator.step(BuildAction.finaliseItem, item);
     _processor = builder.build();
   }
 
@@ -429,6 +430,7 @@ class XmlTreeBuilder {
       } else {
         if (item.isLeaf) {
           builder.addChild(item.delegate, item.data);
+          coordinator.step(BuildAction.finaliseItem, item);
         } else {
           builder.push(item.delegate, item.data);
           coordinator.step(BuildAction.goLevelDown, item);
@@ -437,6 +439,7 @@ class XmlTreeBuilder {
             builder.levelUp();
             coordinator.step(BuildAction.goLevelUp, item);
           }
+          coordinator.step(BuildAction.finaliseItem, item);
         }
       }
     }
@@ -465,7 +468,7 @@ class XmlTreeBuilder {
           "Delegate for ${item.name} didn't return Action.proceed");
     }
     constValDepth--;
-    coordinator.step(BuildAction.finaliseConstVal, item);
+    coordinator.step(BuildAction.finaliseItem, item);
     return result;
   }
 }
