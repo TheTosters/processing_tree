@@ -13,18 +13,16 @@
 
 include: package:lints/recommended.yaml
 
-# Uncomment the following section to specify additional rules.
+analyzer:
+  plugins:
+    - dart_code_metrics
 
-# linter:
-#   rules:
-#     - camel_case_types
-
-# analyzer:
-#   exclude:
-#     - path/to/excluded/files/**
-
-# For more information about the core and recommended set of lints, see
-# https://dart.dev/go/core-lints
-
-# For additional information about configuring this file, see
-# https://dart.dev/guides/language/analysis-options
+dart_code_metrics:
+  metrics:
+    cyclomatic-complexity: 10
+    number-of-arguments: 6
+    maximum-nesting-level: 5
+  metrics-exclude:
+    - test/**
+  anti-patterns:
+    - long-parameter-list

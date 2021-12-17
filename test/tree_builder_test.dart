@@ -1,7 +1,7 @@
 import 'package:collection/collection.dart';
-import 'package:processing_tree/processing_node.dart';
+import 'package:processing_tree/src/processing_node.dart';
 import 'package:processing_tree/processing_tree.dart';
-import 'package:processing_tree/tree_builder.dart';
+import 'package:processing_tree/src/tree_builder.dart';
 import 'package:test/test.dart';
 
 void main() {
