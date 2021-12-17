@@ -387,9 +387,6 @@ class XmlTreeBuilder {
 
   void _parseXmlRoot(XmlElement xmlElement) {
     final ParsedItem item = _processElement(xmlElement);
-    if (item.type == ParsedItemType.constValue) {
-      throw TreeBuilderException("Root of tree can't be a constVal");
-    }
     if (!item.isLeaf) {
       coordinator.step(BuildAction.goLevelDown, item);
     }

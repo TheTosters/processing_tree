@@ -297,16 +297,6 @@ void main() {
     expect(coord.lastXmlMap?.isEmpty, true);
   });
 
-  test("Coordinated - constVal can't be root", () {
-    XmlTreeBuilder builder = XmlTreeBuilder.coordinated(ConstValCoordinator());
-    final xml = '''
-      <const>
-          <xml/>
-      </const>
-    ''';
-    expect(() => builder.build(xml), throwsA((e) => e is TreeBuilderException));
-  });
-
   test("Coordinated - verify parents", () {
     final xml = '''
       <A>
