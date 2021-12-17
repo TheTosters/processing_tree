@@ -6,12 +6,16 @@ import 'package:test/test.dart';
 import 'package:xml/xml.dart';
 
 class SimpleCoordinator extends BuildCoordinator {
+  Map<String, dynamic>? lastXmlMap;
   @override
   ParsedItem requestData(BuildPhaseState state) {
     switch (state.delegateName) {
       case "xml":
-        return ParsedItem.from(
-            state, _copyDelegate, <String, dynamic>{}, ParsedItemType.owner);
+        {
+          lastXmlMap = <String, dynamic>{};
+          return ParsedItem.from(
+              state, _copyDelegate, lastXmlMap, ParsedItemType.owner);
+        }
       case "const":
         return ParsedItem.from(
             state, _constDelegate, state.data, ParsedItemType.constValue);
@@ -156,16 +160,19 @@ void main() {
         "MapEntry(constB: MapEntry(constC: const_val_lvl3)const_val_lvl2)const_val_lvl1");
     final expAct = [
       "BuildAction.newItem|xml",
+      "BuildAction.goLevelDown|xml",
       "BuildAction.newItem|constA",
       "BuildAction.goLevelDown|constA",
       "BuildAction.newItem|constB",
       "BuildAction.goLevelDown|constB",
       "BuildAction.newItem|constC",
-      "BuildAction.finaliseConstVal|constC",
+      "BuildAction.finaliseItem|constC",
       "BuildAction.goLevelUp|constB",
-      "BuildAction.finaliseConstVal|constB",
+      "BuildAction.finaliseItem|constB",
       "BuildAction.goLevelUp|constA",
-      "BuildAction.finaliseConstVal|constA"
+      "BuildAction.finaliseItem|constA",
+      "BuildAction.goLevelUp|xml",
+      "BuildAction.finaliseItem|xml"
     ];
     Function equals = const ListEquality().equals;
     expect(equals(c.actions, expAct), true);
@@ -188,14 +195,34 @@ void main() {
         "MapEntry(constB: const_val_lvl2),MapEntry(constC: const_val_lvl3)const_val_lvl1");
     final expAct = [
       "BuildAction.newItem|xml",
+      "BuildAction.goLevelDown|xml",
       "BuildAction.newItem|constA",
       "BuildAction.goLevelDown|constA",
       "BuildAction.newItem|constB",
-      "BuildAction.finaliseConstVal|constB",
+      "BuildAction.finaliseItem|constB",
       "BuildAction.newItem|constC",
-      "BuildAction.finaliseConstVal|constC",
+      "BuildAction.finaliseItem|constC",
       "BuildAction.goLevelUp|constA",
-      "BuildAction.finaliseConstVal|constA"
+      "BuildAction.finaliseItem|constA",
+      "BuildAction.goLevelUp|xml",
+      "BuildAction.finaliseItem|xml"
+    ];
+    Function equals = const ListEquality().equals;
+    expect(equals(c.actions, expAct), true);
+  });
+
+  test("Coordinated - no levelDown/Up for leaf only root", () {
+    final c = ConstValCoordinator();
+    XmlTreeBuilder builder = XmlTreeBuilder.coordinated(c);
+    var prc = builder.build('''
+      <xml>
+      </xml>
+    ''');
+    Map<String, dynamic> result = {};
+    prc.process(result);
+    final expAct = [
+      "BuildAction.newItem|xml",
+      "BuildAction.finaliseItem|xml"
     ];
     Function equals = const ListEquality().equals;
     expect(equals(c.actions, expAct), true);
@@ -212,4 +239,28 @@ void main() {
     ''';
     expect(() => builder.build(xml), throwsA((e) => e is TreeBuilderException));
   });
+
+  test("Coordinated - Don't add null const val", () {
+    final coord = SimpleCoordinator();
+    XmlTreeBuilder builder = XmlTreeBuilder.coordinated(coord);
+    final xml = '''
+      <xml>
+        <const/>
+      </xml>
+    ''';
+    builder.build(xml);
+    expect(coord.lastXmlMap?.isEmpty, true);
+  });
+
+  test("Coordinated - constVal can't be root", () {
+    XmlTreeBuilder builder = XmlTreeBuilder.coordinated(ConstValCoordinator());
+    final xml = '''
+      <const>
+          <xml/>
+      </const>
+    ''';
+    expect(() => builder.build(xml), throwsA((e) => e is TreeBuilderException));
+  });
+
+  //TODO: No levelDown/Up if tree has only root with no children
 }

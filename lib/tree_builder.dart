@@ -387,8 +387,17 @@ class XmlTreeBuilder {
 
   void _parseXmlRoot(XmlElement xmlElement) {
     final ParsedItem item = _processElement(xmlElement);
+    if (item.type == ParsedItemType.constValue) {
+      throw TreeBuilderException("Root of tree can't be a constVal");
+    }
+    if (!item.isLeaf) {
+      coordinator.step(BuildAction.goLevelDown, item);
+    }
     StackedTreeBuilder builder = StackedTreeBuilder(item.delegate, item.data);
     _processSubLevel(xmlElement, builder, false);
+    if (!item.isLeaf) {
+      coordinator.step(BuildAction.goLevelUp, item);
+    }
     coordinator.step(BuildAction.finaliseItem, item);
     _processor = builder.build();
   }
@@ -425,7 +434,9 @@ class XmlTreeBuilder {
       //See documentation of ParsedItemType for details
       if (item.type == ParsedItemType.constValue) {
         final result = _handleAsConstValue(subElement, item);
-        builder._current.data[result.key] = result.value;
+        if (result.value != null) {
+          builder._current.data[result.key] = result.value;
+        }
         continue;
       } else {
         if (item.isLeaf) {
