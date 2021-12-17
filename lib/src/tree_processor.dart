@@ -1,4 +1,4 @@
-import 'package:processing_tree/processing_node.dart';
+import 'package:processing_tree/src/processing_node.dart';
 
 /// Interface which allows execution of processing tree.
 abstract class TreeProcessor {
