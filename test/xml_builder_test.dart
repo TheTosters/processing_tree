@@ -7,6 +7,7 @@ import 'package:xml/xml.dart';
 
 class SimpleCoordinator extends BuildCoordinator {
   Map<String, dynamic>? lastXmlMap;
+
   @override
   ParsedItem requestData(BuildPhaseState state) {
     switch (state.delegateName) {
@@ -36,7 +37,7 @@ class SimpleCoordinator extends BuildCoordinator {
 
   @override
   void step(BuildAction action, ParsedItem item) {
-    // TODO: implement step
+    //notning
   }
 }
 
@@ -74,6 +75,52 @@ class ConstValCoordinator extends BuildCoordinator {
   }
 }
 
+class ExpParentCoordinator extends BuildCoordinator {
+  final Map<String, String> childParent;
+  final ParsedItemType type;
+
+  ExpParentCoordinator(this.childParent, this.type);
+
+  @override
+  ParsedItem requestData(BuildPhaseState state) {
+    expect(state.parentNodeName, childParent[state.delegateName]);
+    if (state.parentNodeName == "") {
+      //root is always owner
+      return ParsedItem.from(
+          state, (c, d) => Action.proceed, state.data, ParsedItemType.owner);
+    } else {
+      return ParsedItem.from(state, (c, d) => Action.proceed, state.data, type);
+    }
+  }
+
+  @override
+  void step(BuildAction action, ParsedItem item) {
+    //nothing
+  }
+}
+
+class SimpleCoordinator2 extends BuildCoordinator {
+  final Map<String, ParsedItemType> items;
+  final Set<String> result = {};
+
+  SimpleCoordinator2(this.items);
+
+  @override
+  ParsedItem requestData(BuildPhaseState state) {
+    return ParsedItem.from(state, _addValue, state.data, items[state.delegateName]!);
+  }
+
+  @override
+  void step(BuildAction action, ParsedItem item) {
+    //nothing
+  }
+
+  Action _addValue(context, data) {
+    result.add(data["name"]);
+    return Action.proceed;
+  }
+}
+
 class NoDelegateProvider extends DelegateProvider {
   @override
   PNDelegate? delegate(String name) => null;
@@ -99,6 +146,7 @@ class MarkedDelegateProvider extends DelegateProvider {
     return null;
   }
 }
+
 
 void main() {
   test("No delegate", () {
@@ -220,10 +268,7 @@ void main() {
     ''');
     Map<String, dynamic> result = {};
     prc.process(result);
-    final expAct = [
-      "BuildAction.newItem|xml",
-      "BuildAction.finaliseItem|xml"
-    ];
+    final expAct = ["BuildAction.newItem|xml", "BuildAction.finaliseItem|xml"];
     Function equals = const ListEquality().equals;
     expect(equals(c.actions, expAct), true);
   });
@@ -262,5 +307,77 @@ void main() {
     expect(() => builder.build(xml), throwsA((e) => e is TreeBuilderException));
   });
 
-  //TODO: No levelDown/Up if tree has only root with no children
+  test("Coordinated - verify parents", () {
+    final xml = '''
+      <A>
+        <B>
+          <D/>
+        </B>
+        <C>
+          <E>
+            <G/>
+          </E>
+          <F></F>
+          <H>
+            <I/>
+          </H>
+        </C>
+      </A>
+    ''';
+    final childParent = {
+      "A": "",
+      "B": "A",
+      "C": "A",
+      "D": "B",
+      "E": "C",
+      "F": "C",
+      "H": "C",
+      "G": "E",
+      "I": "H",
+    };
+    //for node types Owner
+    var coord = ExpParentCoordinator(childParent, ParsedItemType.owner);
+    XmlTreeBuilder builder = XmlTreeBuilder.coordinated(coord);
+    builder.build(xml);
+
+    //for node types ConstVal
+    coord = ExpParentCoordinator(childParent, ParsedItemType.constValue);
+    builder = XmlTreeBuilder.coordinated(coord);
+    builder.build(xml);
+  });
+
+  test("Coordinated - ConstVal delegates should not be called at process", () {
+    final c = SimpleCoordinator2({
+      "owner": ParsedItemType.owner,
+      "owner2": ParsedItemType.owner,
+      "owner3": ParsedItemType.owner,
+      "const": ParsedItemType.constValue,
+      "const2": ParsedItemType.constValue,
+      "const3": ParsedItemType.constValue,
+    });
+    XmlTreeBuilder builder = XmlTreeBuilder.coordinated(c);
+    var prc = builder.build('''
+      <owner name="owner">
+        <owner2 name="owner2">
+          <const name="const"/>
+        </owner2>
+        <owner3 name="owner3">
+          <const2 name="const2">
+            <const3 name="const3"/>
+          </const2>
+        </owner3>
+      </owner>
+    ''');
+
+    // const value delegates are executed at build phase
+    final expConstValues = {"const", "const2", "const3"};
+    Function equals = const SetEquality().equals;
+    expect(equals(c.result, expConstValues), true);
+
+    // owner delegates are executed at process phase
+    c.result.clear();
+    prc.process(null);
+    final expOwners = {"owner", "owner2", "owner3"};
+    expect(equals(c.result, expOwners), true);
+  });
 }
