@@ -16,6 +16,8 @@ export 'src/tree_builder.dart'
         ParsedItemType,
         KeyValue,
         BuildAction,
-        ParsedItem;
+        ParsedItem,
+        BuildPhaseState,
+        TreeBuilderException;
 export 'src/tree_processor.dart' show TreeProcessor;
 export 'src/processing_node.dart' show Action, PNDelegate;

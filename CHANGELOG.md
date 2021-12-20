@@ -1,3 +1,7 @@
+## 0.2.1
+
+- Expose types: BuildPhaseState and TreeBuilderException
+
 ## 0.2.0
 
 - Extend XmlTreeBuilder to allow coordinated build.
