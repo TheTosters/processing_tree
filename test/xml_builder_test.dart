@@ -1,6 +1,6 @@
 import 'package:collection/collection.dart';
-import 'package:processing_tree/src/processing_node.dart';
 import 'package:processing_tree/processing_tree.dart';
+import 'package:processing_tree/src/processing_node.dart';
 import 'package:processing_tree/src/tree_builder.dart';
 import 'package:test/test.dart';
 import 'package:xml/xml.dart';
@@ -99,6 +99,42 @@ class ExpParentCoordinator extends BuildCoordinator {
   }
 }
 
+class UpDownCountCoordinator extends BuildCoordinator {
+  int levelBalance = 0;
+  int newFinalizedBalance = 0;
+  int maxLevelDepth = 0;
+  int newItemsCount = 0;
+
+  @override
+  ParsedItem requestData(BuildPhaseState state) {
+    ParsedItemType type = state.delegateName == "owner"
+        ? ParsedItemType.owner
+        : ParsedItemType.constValue;
+    return ParsedItem.from(state, (c, d) => Action.proceed, state.data, type);
+  }
+
+  @override
+  void step(BuildAction action, ParsedItem item) {
+    switch (action) {
+      case BuildAction.newItem:
+        newItemsCount++;
+        newFinalizedBalance++;
+        break;
+      case BuildAction.finaliseItem:
+        newFinalizedBalance--;
+        break;
+      case BuildAction.goLevelDown:
+        levelBalance++;
+        maxLevelDepth =
+            maxLevelDepth < levelBalance ? levelBalance : maxLevelDepth;
+        break;
+      case BuildAction.goLevelUp:
+        levelBalance--;
+        break;
+    }
+  }
+}
+
 class SimpleCoordinator2 extends BuildCoordinator {
   final Map<String, ParsedItemType> items;
   final Set<String> result = {};
@@ -107,7 +143,8 @@ class SimpleCoordinator2 extends BuildCoordinator {
 
   @override
   ParsedItem requestData(BuildPhaseState state) {
-    return ParsedItem.from(state, _addValue, state.data, items[state.delegateName]!);
+    return ParsedItem.from(
+        state, _addValue, state.data, items[state.delegateName]!);
   }
 
   @override
@@ -146,7 +183,6 @@ class MarkedDelegateProvider extends DelegateProvider {
     return null;
   }
 }
-
 
 void main() {
   test("No delegate", () {
@@ -369,5 +405,32 @@ void main() {
     prc.process(null);
     final expOwners = {"owner", "owner2", "owner3"};
     expect(equals(c.result, expOwners), true);
+  });
+
+  test("Coordinated - ConstVal delegates should not be called at process", () {
+    final c = UpDownCountCoordinator();
+    XmlTreeBuilder builder = XmlTreeBuilder.coordinated(c);
+    builder.build('''
+      <owner>
+        <owner>
+          <const/>
+        </owner>
+        <owner>
+          <const>
+            <const/>
+          </const>
+        </owner>
+        <owner>
+          <owner>
+            <owner>
+            </owner>
+          </owner>
+        </owner>
+      </owner>
+    ''');
+    expect(c.levelBalance, 0);
+    expect(c.newFinalizedBalance, 0);
+    expect(c.maxLevelDepth, 3);
+    expect(c.newItemsCount, 9);
   });
 }

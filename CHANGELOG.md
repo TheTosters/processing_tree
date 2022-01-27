@@ -1,6 +1,10 @@
+## 0.2.2
+
+- Fix: Wrong notifications about level change while coordinated build.
+
 ## 0.2.1
 
-- Expose types: BuildPhaseState and TreeBuilderException
+- Expose types: BuildPhaseState and TreeBuilderException.
 
 ## 0.2.0
 

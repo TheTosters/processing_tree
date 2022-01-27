@@ -285,7 +285,7 @@ enum BuildAction {
   /// New item which is owner type is about to be processed. This action is
   /// before any other call to coordinator
   newItem,
-  
+
   /// Item was just finalised, no more actions for it will be done.
   finaliseItem,
 
@@ -391,7 +391,7 @@ class XmlTreeBuilder {
       coordinator.step(BuildAction.goLevelDown, item);
     }
     StackedTreeBuilder builder = StackedTreeBuilder(item.delegate, item.data);
-    _processSubLevel(xmlElement, builder, false);
+    _processSubLevel(xmlElement, builder);
     if (!item.isLeaf) {
       coordinator.step(BuildAction.goLevelUp, item);
     }
@@ -423,8 +423,7 @@ class XmlTreeBuilder {
     return item;
   }
 
-  void _processSubLevel(
-      XmlElement xmlElement, StackedTreeBuilder builder, bool popLevelAtEnd) {
+  void _processSubLevel(XmlElement xmlElement, StackedTreeBuilder builder) {
     for (var subElement in xmlElement.childElements) {
       final ParsedItem item = _processElement(subElement);
 
@@ -442,11 +441,9 @@ class XmlTreeBuilder {
         } else {
           builder.push(item.delegate, item.data);
           coordinator.step(BuildAction.goLevelDown, item);
-          _processSubLevel(subElement, builder, true);
-          if (popLevelAtEnd) {
-            builder.levelUp();
-            coordinator.step(BuildAction.goLevelUp, item);
-          }
+          _processSubLevel(subElement, builder);
+          builder.levelUp();
+          coordinator.step(BuildAction.goLevelUp, item);
           coordinator.step(BuildAction.finaliseItem, item);
         }
       }
